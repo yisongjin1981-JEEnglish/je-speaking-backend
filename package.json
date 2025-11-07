@@ -1,6 +1,7 @@
 {
   "name": "je-speaking-backend",
   "version": "1.0.0",
+  "description": "JE English Speaking AI Feedback Backend",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -17,4 +18,5 @@
     "node": "20.x"
   }
 }
+
 
