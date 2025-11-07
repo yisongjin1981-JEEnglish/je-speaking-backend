@@ -1,23 +1,20 @@
 {
   "name": "je-speaking-backend",
   "version": "1.0.0",
-  "description": "JE English Speaking AI Feedback Backend",
-  "main": "server.js",  // 主启动文件
-  "type": "module",     // 使用 ES6 模块
+  "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",  // 启动命令
-    "install": "npm install"    // 安装命令
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",       // Express 依赖
-    "cors": "^2.8.5",           // CORS 依赖
-    "multer": "^1.4.5-lts.1",   // 文件上传依赖
-    "dotenv": "^16.3.1",        // 环境变量加载依赖
-    "openai": "^4.47.1"         // OpenAI API 依赖
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.3.1",
+    "openai": "^4.47.1"
   },
   "engines": {
-    "node": "20.x"              // 推荐使用 Node.js 20.x 版本
-  },
-  "devDependencies": {}           // 开发依赖（如果有的话）
+    "node": "20.x"
+  }
 }
 
