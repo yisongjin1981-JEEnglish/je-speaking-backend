@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js"
+    "install": "npm install"
   },
   "dependencies": {
     "cors": "^2.8.5",
