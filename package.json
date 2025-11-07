@@ -1,21 +1,19 @@
 {
   "name": "je-speaking-backend",
   "version": "1.0.0",
-  "description": "JE English Speaking AI Feedback Backend",
-  "main": "server.js",
-  "type": "module",
   "scripts": {
     "start": "node server.js",
     "install": "npm install"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
     "express": "^4.19.2",
+    "cors": "^2.8.5",
     "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.3.1",
     "openai": "^4.47.1"
   },
   "engines": {
     "node": "20.x"
   }
 }
+
