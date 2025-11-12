@@ -59,24 +59,34 @@ app.post("/api/speaking/grade", async (req, res) => {
     console.log("🗣 Transcribed text:", transcription);
 
     // Step 2️⃣: GPT 语言分析
-    const prompt = `
-You are an English speaking evaluator.
-Below is a student's spoken response:
+   const prompt = `
+You are an English speaking coach for B1–B2 students.
 
-"${transcription}"
+Below are 5 example sentences from the lesson. 
+The student just gave a 90-second response based on these examples.
 
-Please evaluate it in three short parts:
-1. Fluency (smoothness and natural flow)
-2. Vocabulary (word variety and accuracy)
-3. Grammar (sentence structure and correctness)
+Examples:
+${examples.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
-Respond in valid JSON only:
-{
-  "fluency": "...",
-  "vocabulary": "...",
-  "grammar": "..."
-}
+Student's 90s response:
+${text}
+
+Please:
+1. Understand the main ideas in the examples (content & structure).
+2. Check if the student’s speech follows the same ideas and is clear.
+3. Give short, easy-to-understand feedback for each part:
+   💬 Fluency — Is the speech smooth and easy to follow?
+   🧠 Vocabulary — Are the words natural and similar to the examples?
+   🛠 Grammar — Any small mistakes? Show one correction if possible.
+
+Use simple English (A2–B1 level), and give at least one concrete suggestion 
+like this:
+
+💬 Fluency: Good flow! Try to speak a little slower.
+🧠 Vocabulary: Nice! You can also say “...” instead of “...”.
+🛠 Grammar: Almost perfect! 👉 Instead of “He go”, ✅ Say “He goes”.
 `;
+
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
