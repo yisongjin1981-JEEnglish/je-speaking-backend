@@ -1,3 +1,7 @@
-build:
-  command: "npm install"
-  publish: "/opt/render/project/src"
+services:
+  - type: web
+    name: je-speaking-backend
+    env: node
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "node server.js"
