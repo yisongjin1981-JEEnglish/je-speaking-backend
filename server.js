@@ -156,6 +156,7 @@ Please:
       feedback,
       used: userUsage.used,
       limit: userUsage.limit,
+  remaining: userUsage.limit - userUsage.used, // ✅ 新增：剩余次数
     });
 
     // 删除临时文件
