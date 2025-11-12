@@ -149,7 +149,8 @@ Please:
 
  // === Step 3️⃣ 更新用量 ===
 userUsage.used++;
-// ✅ 先返回响应，避免 Render 超时
+
+// ✅ 先返回给前端（只发一次）
 res.json({
   feedback,
   used: userUsage.used,
@@ -157,17 +158,12 @@ res.json({
   remaining: userUsage.limit - userUsage.used,
 });
 
-// 异步更新 usage，不阻塞返回
-writeUsage(usageData).catch(err => console.error("❌ Failed to update usage:", err));
-fs.unlink(tempPath, () => {});
+// 异步执行后续逻辑，不再 return 或再发响应
+writeUsage(usageData)
+  .then(() => console.log("✅ Usage updated in JSONBin"))
+  .catch(err => console.error("❌ Failed to update usage:", err));
 
-    // === Step 4️⃣ 返回结果 ===
-    res.json({
-      feedback,
-      used: userUsage.used,
-      limit: userUsage.limit,
-  remaining: userUsage.limit - userUsage.used, // ✅ 新增：剩余次数
-    });
+fs.unlink(tempPath, () => {});
 
     // 删除临时文件
     fs.unlink(tempPath, () => {});
