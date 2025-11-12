@@ -114,8 +114,8 @@ app.post("/api/speaking/grade", async (req, res) => {
     const text = transcription.trim();
     console.log("🗣 Transcribed text:", text);
 
-    // === Step 2️⃣ GPT 反馈生成 ===
-    const feedbackPrompt = `
+   // === Step 2️⃣ GPT 反馈生成 ===
+const feedbackPrompt = `
 You are an English speaking coach for B1–B2 students.
 Below are 5 example sentences from the lesson.
 The student just gave a 90-second response based on these examples.
@@ -135,35 +135,47 @@ Please:
 🛠 Grammar — comment + 1 correction (use 👉 and ✅)
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are a kind English teacher." },
-        { role: "user", content: feedbackPrompt },
-      ],
-      temperature: 0.5,
-    });
+const completion = await openai.chat.completions.create({
+  model: "gpt-4o-mini",
+  messages: [
+    { role: "system", content: "You are a kind English teacher." },
+    { role: "user", content: feedbackPrompt },
+  ],
+  temperature: 0.5,
+});
 
-    const feedback = completion.choices[0].message.content.trim();
-    console.log("🧠 Feedback:", feedback);
+const feedbackText = completion.choices[0].message.content.trim();
+console.log("🧠 Full Feedback Text:\n", feedbackText);
 
- // === Step 3️⃣ 更新用量 ===
+// === Step 2.5️⃣ 解析三项反馈 ===
+const fluencyMatch = feedbackText.match(/Fluency[:：]?\s*([\s\S]*?)(?=🧠|Vocabulary|$)/i);
+const vocabMatch = feedbackText.match(/Vocabulary[:：]?\s*([\s\S]*?)(?=🛠|Grammar|$)/i);
+const grammarMatch = feedbackText.match(/Grammar[:：]?\s*([\s\S]*)/i);
+
+const fluencyFeedback = fluencyMatch ? fluencyMatch[1].trim() : "";
+const vocabularyFeedback = vocabMatch ? vocabMatch[1].trim() : "";
+const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
+
+// === Step 3️⃣ 更新用量 ===
 userUsage.used++;
 
-// ✅ 先返回给前端（只发一次）
+// ✅ 先返回前端（防止 Render 超时）
 res.json({
-  feedback,
+  fluency: fluencyFeedback,
+  vocabulary: vocabularyFeedback,
+  grammar: grammarFeedback,
   used: userUsage.used,
   limit: userUsage.limit,
   remaining: userUsage.limit - userUsage.used,
 });
 
-// 异步执行后续逻辑，不再 return 或再发响应
+// === Step 4️⃣ 异步执行更新和清理 ===
 writeUsage(usageData)
   .then(() => console.log("✅ Usage updated in JSONBin"))
   .catch(err => console.error("❌ Failed to update usage:", err));
 
 fs.unlink(tempPath, () => {});
+
 
     // 删除临时文件
     fs.unlink(tempPath, () => {});
