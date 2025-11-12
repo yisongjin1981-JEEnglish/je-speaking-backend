@@ -11,9 +11,10 @@ const PORT = process.env.PORT || 10000;
 
 // 中间件
 app.use(cors({
-  origin: process.env.CLIENT_URL || "*", // ← 生产环境可改成 https://jeenglish.com
+  origin: process.env.CLIENT_URL || "https://jeenglish.com",
   methods: ["GET", "POST"],
 }));
+
 app.use(express.json());
 app.use(fileUpload());
 
