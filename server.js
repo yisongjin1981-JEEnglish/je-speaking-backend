@@ -26,10 +26,10 @@ app.use(fileUpload());
 // ==============================
 // 🗂️ JSONBin 云存储配置
 // ==============================
-const JSONBIN_URL = process.env.JSONBIN_URL; // e.g. https://api.jsonbin.io/v3/b/66abc12345
+const JSONBIN_URL = process.env.JSONBIN_URL;
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
 
-// 从云端读取 usage.json
+// 读取 usage.json
 async function readUsage() {
   try {
     const res = await axios.get(JSONBIN_URL, {
@@ -42,7 +42,7 @@ async function readUsage() {
   }
 }
 
-// 写回 usage.json 到云端
+// 写回 usage.json
 async function writeUsage(data) {
   await axios.put(JSONBIN_URL, data, {
     headers: {
@@ -82,26 +82,11 @@ app.get("/api/usage/:email", async (req, res) => {
 // ==============================
 app.post("/api/speaking/grade", async (req, res) => {
   try {
-    // 1️⃣ 语音识别、AI 分析逻辑
-    const transcript = "I see a man walking on the platform.";
-    const fluencyFeedback = "You spoke clearly...";
-    const vocabularyFeedback = "You used good words...";
-    const grammarFeedback = "Your grammar was mostly correct...";
-
-    console.log("🧠 Feedback generated successfully");
-    
-    // 2️⃣ ✅ 返回给前端
-    res.json({
-      fluency: fluencyFeedback,
-      vocabulary: vocabularyFeedback,
-      grammar: grammarFeedback,
-    });
-
-  } catch (error) {
-    console.error("Error generating feedback:", error);
-    res.status(500).json({ error: "Failed to generate feedback" });
-  }
-});
+    // === 参数解析 ===
+    const { files, body } = req;
+    const audioFile = files?.audio;
+    const userEmail = body?.userEmail?.toLowerCase() || "anonymous@example.com";
+    const examples = JSON.parse(body?.examples || "[]");
 
     // === 使用次数控制 ===
     const monthKey = new Date().toISOString().slice(0, 7);
@@ -173,7 +158,8 @@ Please:
       limit: userUsage.limit,
     });
 
-    fs.unlink(tempPath, () => {}); // 删除临时音频
+    // 删除临时文件
+    fs.unlink(tempPath, () => {});
   } catch (err) {
     console.error("❌ Error in /api/speaking/grade:", err);
     res.status(500).json({ error: "Server error during speech grading." });
