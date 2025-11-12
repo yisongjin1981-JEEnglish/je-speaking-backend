@@ -26,14 +26,18 @@ app.use(fileUpload());
 // ==============================
 // 🗂️ JSONBin 云存储配置
 // ==============================
-const JSONBIN_URL = process.env.JSONBIN_URL;
+const JSONBIN_URL = process.env.JSONBIN_URL; // e.g. https://api.jsonbin.io/v3/b/66abc12345
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
 
-// 读取 usage.json
+// 从云端读取 usage.json（强制不缓存）
 async function readUsage() {
   try {
     const res = await axios.get(JSONBIN_URL, {
-      headers: { "X-Master-Key": JSONBIN_KEY },
+      headers: {
+        "X-Master-Key": JSONBIN_KEY,
+        "X-Bin-Meta": "false",
+        "X-Cache-Control": "no-cache", // ✅ 强制不使用缓存
+      },
     });
     return res.data?.record || {};
   } catch (err) {
@@ -42,7 +46,7 @@ async function readUsage() {
   }
 }
 
-// 写回 usage.json
+// 写回 usage.json 到云端
 async function writeUsage(data) {
   await axios.put(JSONBIN_URL, data, {
     headers: {
@@ -159,22 +163,24 @@ const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
 // === Step 3️⃣ 更新用量 ===
 userUsage.used++;
 
-// ✅ 先返回前端（防止 Render 超时）
+// ✅ 立即返回前端（带上最新用量）
 res.json({
   fluency: fluencyFeedback,
   vocabulary: vocabularyFeedback,
   grammar: grammarFeedback,
-  used: userUsage.used,
+  used: userUsage.used,        // ✅ 新增：当前最新用量
   limit: userUsage.limit,
   remaining: userUsage.limit - userUsage.used,
+  updated: true,               // ✅ 新增：标识用于调试
 });
 
-// === Step 4️⃣ 异步执行更新和清理 ===
+// === Step 4️⃣ 异步写入 JSONBin + 删除临时文件 ===
 writeUsage(usageData)
   .then(() => console.log("✅ Usage updated in JSONBin"))
   .catch(err => console.error("❌ Failed to update usage:", err));
 
 fs.unlink(tempPath, () => {});
+
 
 
     // 删除临时文件
