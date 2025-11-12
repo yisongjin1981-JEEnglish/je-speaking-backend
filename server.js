@@ -147,9 +147,19 @@ Please:
     const feedback = completion.choices[0].message.content.trim();
     console.log("🧠 Feedback:", feedback);
 
-    // === Step 3️⃣ 更新用量 ===
-    userUsage.used++;
-    await writeUsage(usageData);
+ // === Step 3️⃣ 更新用量 ===
+userUsage.used++;
+// ✅ 先返回响应，避免 Render 超时
+res.json({
+  feedback,
+  used: userUsage.used,
+  limit: userUsage.limit,
+  remaining: userUsage.limit - userUsage.used,
+});
+
+// 异步更新 usage，不阻塞返回
+writeUsage(usageData).catch(err => console.error("❌ Failed to update usage:", err));
+fs.unlink(tempPath, () => {});
 
     // === Step 4️⃣ 返回结果 ===
     res.json({
