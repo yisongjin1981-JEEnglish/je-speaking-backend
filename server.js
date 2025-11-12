@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import fileUpload from "express-fileupload";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 import { OpenAI } from "openai";
 
 dotenv.config();
@@ -9,83 +11,115 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// 中间件
+// ==============================
+// 🌐 基础中间件
+// ==============================
 app.use(cors({
   origin: process.env.CLIENT_URL || "https://jeenglish.com",
   methods: ["GET", "POST"],
 }));
-
 app.use(express.json());
 app.use(fileUpload());
 
-// 测试路由（可在浏览器直接访问确认服务是否启动）
+// ==============================
+// 🧭 测试路由
+// ==============================
 app.get("/", (req, res) => {
   res.send("✅ JE Speaking Backend is running successfully!");
 });
 
-// 关键接口：AI 口语评分
+// ==============================
+// 🧠 AI 口语评分路由
+// ==============================
 app.post("/api/speaking/grade", async (req, res) => {
   try {
-    const audioFile = req.files?.audio;
-    if (!audioFile) {
+    // 🗂️ 检查上传文件
+    if (!req.files || !req.files.audio) {
       return res.status(400).json({ error: "No audio file uploaded." });
     }
 
-    // 初始化 OpenAI
+    const audioFile = req.files.audio;
+    const tempPath = path.join("/tmp", audioFile.name);
+    await audioFile.mv(tempPath); // ✅ 写入 Render 临时目录
+
+    // 🧠 初始化 OpenAI 客户端
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
+    console.log("🎧 Received audio:", audioFile.name);
+
     // Step 1️⃣: Whisper 语音转文字
     const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(tempPath),
       model: "whisper-1",
-      file: audioFile.data,
+      response_format: "text",
     });
 
-    const text = transcription.text;
-    console.log("🎧 Transcribed text:", text);
+    console.log("🗣 Transcribed text:", transcription);
 
-    // Step 2️⃣: 调用 GPT 分析语言质量
-    const feedbackPrompt = `
-You are an English speaking test coach.
-Analyze the student's spoken response below and give feedback in three parts:
+    // Step 2️⃣: GPT 语言分析
+    const prompt = `
+You are an English speaking evaluator.
+Below is a student's spoken response:
 
-1. Fluency (how smooth and natural the speaking is)
-2. Vocabulary (word choice and variety)
-3. Grammar (errors and improvements)
+"${transcription}"
 
-Return the feedback in concise English sentences.
+Please evaluate it in three short parts:
+1. Fluency (smoothness and natural flow)
+2. Vocabulary (word variety and accuracy)
+3. Grammar (sentence structure and correctness)
 
-Response:
-${text}
+Respond in valid JSON only:
+{
+  "fluency": "...",
+  "vocabulary": "...",
+  "grammar": "..."
+}
 `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "You are a helpful English speaking evaluator." },
-        { role: "user", content: feedbackPrompt },
+        { role: "system", content: "You are a helpful English teacher." },
+        { role: "user", content: prompt },
       ],
+      temperature: 0.4,
     });
 
-    const result = completion.choices[0].message.content || "";
+    const raw = completion.choices[0].message.content.trim();
+    console.log("🧠 Raw feedback:", raw);
 
-    // 将结果拆成三段（粗略分割）
-    const [fluency, vocabulary, grammar] = result.split(/\n\s*\n/);
+    // Step 3️⃣: 安全 JSON 解析
+    let feedback;
+    try {
+      feedback = JSON.parse(raw);
+    } catch (e) {
+      feedback = {
+        fluency: raw,
+        vocabulary: "Feedback format unclear.",
+        grammar: "Feedback format unclear.",
+      };
+    }
 
+    // Step 4️⃣: 返回前端
     res.json({
-      fluency: fluency || "No fluency feedback.",
-      vocabulary: vocabulary || "No vocabulary feedback.",
-      grammar: grammar || "No grammar feedback.",
+      fluency: feedback.fluency || "No fluency feedback.",
+      vocabulary: feedback.vocabulary || "No vocabulary feedback.",
+      grammar: feedback.grammar || "No grammar feedback.",
     });
 
+    // ✅ 删除临时文件
+    fs.unlink(tempPath, () => {});
   } catch (err) {
-    console.error("❌ Error generating feedback:", err);
+    console.error("❌ Error in /api/speaking/grade:", err);
     res.status(500).json({ error: err.message || "Internal server error." });
   }
 });
 
-// 启动服务
+// ==============================
+// 🚀 启动服务
+// ==============================
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
 });
