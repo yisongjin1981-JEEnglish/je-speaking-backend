@@ -4,15 +4,17 @@ import fileUpload from "express-fileupload";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
+import axios from "axios";
 import { OpenAI } from "openai";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ==============================
-// 🌐 基础中间件
+// 🌐 基础设置
 // ==============================
 app.use(cors({
   origin: process.env.CLIENT_URL || "https://jeenglish.com",
@@ -22,129 +24,144 @@ app.use(express.json());
 app.use(fileUpload());
 
 // ==============================
+// 🗂️ JSONBin 云存储配置
+// ==============================
+const JSONBIN_URL = process.env.JSONBIN_URL; // e.g. https://api.jsonbin.io/v3/b/66abc12345
+const JSONBIN_KEY = process.env.JSONBIN_KEY;
+
+// 从云端读取 usage.json
+async function readUsage() {
+  try {
+    const res = await axios.get(JSONBIN_URL, {
+      headers: { "X-Master-Key": JSONBIN_KEY },
+    });
+    return res.data?.record || {};
+  } catch (err) {
+    console.warn("⚠️ usage.json not found, creating new one...");
+    return {};
+  }
+}
+
+// 写回 usage.json 到云端
+async function writeUsage(data) {
+  await axios.put(JSONBIN_URL, data, {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": JSONBIN_KEY,
+    },
+  });
+}
+
+// ==============================
 // 🧭 测试路由
 // ==============================
 app.get("/", (req, res) => {
-  res.send("✅ JE Speaking Backend is running successfully!");
+  res.send("✅ JE Speaking Backend (Persistent) is running successfully!");
 });
 
 // ==============================
-// 💾 使用次数记录系统（方案 A）
+// 📊 查询用户使用次数
 // ==============================
-const usageFile = "/tmp/usage.json";
+app.get("/api/usage/:email", async (req, res) => {
+  try {
+    const email = req.params.email.toLowerCase();
+    const monthKey = new Date().toISOString().slice(0, 7);
 
-function loadUsage() {
-  if (!fs.existsSync(usageFile)) return {};
-  return JSON.parse(fs.readFileSync(usageFile, "utf8"));
-}
+    const usageData = await readUsage();
+    const userUsage = usageData[email]?.[monthKey] || { used: 0, limit: 30 };
 
-function saveUsage(data) {
-  fs.writeFileSync(usageFile, JSON.stringify(data, null, 2));
-}
+    res.json(userUsage);
+  } catch (err) {
+    console.error("❌ Error reading usage:", err);
+    res.status(500).json({ error: "Failed to fetch usage data." });
+  }
+});
 
 // ==============================
-// 🧠 AI 口语评分路由
+// 🧠 口语评分接口
 // ==============================
 app.post("/api/speaking/grade", async (req, res) => {
   try {
-    // 🧩 获取用户身份（前端需传 userEmail）
-    const email = req.body.userEmail || "guest@example.com";
-    const today = new Date();
-    const monthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
+    const audioFile = req.files?.audio;
+    const userEmail = (req.body.userEmail || "guest@demo.com").toLowerCase();
+    const examples = JSON.parse(req.body.examples || "[]");
 
-    const usage = loadUsage();
-    if (!usage[email]) usage[email] = {};
-    if (!usage[email][monthKey]) usage[email][monthKey] = 0;
+    if (!audioFile) return res.status(400).json({ error: "No audio uploaded." });
 
-    // 每月最多 30 次
-    if (usage[email][monthKey] >= 30) {
-      return res.status(403).json({
-        error: "❗ Your monthly feedback limit (30) has been reached. Please upgrade your plan or wait for next month.",
-      });
+    // === 使用次数控制 ===
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const usageData = await readUsage();
+
+    if (!usageData[userEmail]) usageData[userEmail] = {};
+    if (!usageData[userEmail][monthKey]) usageData[userEmail][monthKey] = { used: 0, limit: 30 };
+
+    const userUsage = usageData[userEmail][monthKey];
+    if (userUsage.used >= userUsage.limit) {
+      return res.status(403).json({ error: "Monthly limit reached (30 feedbacks)." });
     }
 
-    // ✅ 增加计数
-    usage[email][monthKey]++;
-    saveUsage(usage);
-    console.log(`📊 ${email} used feedback ${usage[email][monthKey]} times in ${monthKey}`);
-
-    // 🗂️ 检查上传文件
-    if (!req.files || !req.files.audio) {
-      return res.status(400).json({ error: "No audio file uploaded." });
-    }
-
-    const audioFile = req.files.audio;
-    const examples = req.body.examples ? JSON.parse(req.body.examples) : [];
+    // === 临时文件保存 ===
     const tempPath = path.join("/tmp", audioFile.name);
     await audioFile.mv(tempPath);
+    console.log(`🎧 Received audio from ${userEmail}: ${audioFile.name}`);
 
-    // 🧠 初始化 OpenAI
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    console.log("🎧 Received audio:", audioFile.name);
-
-    // Step 1️⃣ Whisper 语音转文字
+    // === Step 1️⃣ Whisper 转文字 ===
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(tempPath),
       model: "whisper-1",
       response_format: "text",
     });
-
     const text = transcription.trim();
     console.log("🗣 Transcribed text:", text);
 
-    // Step 2️⃣ GPT 反馈生成
-    const prompt = `
+    // === Step 2️⃣ GPT 反馈生成 ===
+    const feedbackPrompt = `
 You are an English speaking coach for B1–B2 students.
-
 Below are 5 example sentences from the lesson.
-The student gave a 90-second response based on these examples.
+The student just gave a 90-second response based on these examples.
 
 Examples:
 ${examples.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
-Student's response:
+Student's 90s response:
 ${text}
 
 Please:
-- Check how similar and clear the student’s sentences are.
-- Give easy feedback in **simple English (A2–B1 level)**.
-- Focus on 3 parts, each on a new line:
+- Give feedback in **simple English (A2–B1 level)**.
+- Focus on 3 short parts:
+
 💬 Fluency — comment + 1 suggestion  
 🧠 Vocabulary — comment + 1 simple reword  
-🛠 Grammar — comment + 1 correction example (use 👉 and ✅)
+🛠 Grammar — comment + 1 correction (use 👉 and ✅)
 `;
-
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.4,
       messages: [
-        { role: "system", content: "You are a friendly English speaking coach." },
-        { role: "user", content: prompt },
+        { role: "system", content: "You are a kind English teacher." },
+        { role: "user", content: feedbackPrompt },
       ],
+      temperature: 0.5,
     });
 
-    const feedbackText = completion.choices[0].message.content.trim();
-    console.log("🧠 AI Feedback:", feedbackText);
+    const feedback = completion.choices[0].message.content.trim();
+    console.log("🧠 Feedback:", feedback);
 
-    // Step 3️⃣ 格式化输出
-    const extract = (label) => {
-      const regex = new RegExp(`${label}:\\s*([^💬🧠🛠]*)`, "i");
-      const match = feedbackText.match(regex);
-      return match ? match[1].trim() : "";
-    };
+    // === Step 3️⃣ 更新用量 ===
+    userUsage.used++;
+    await writeUsage(usageData);
 
+    // === Step 4️⃣ 返回结果 ===
     res.json({
-      fluency: extract("💬 Fluency") || feedbackText,
-      vocabulary: extract("🧠 Vocabulary") || "",
-      grammar: extract("🛠 Grammar") || "",
+      feedback,
+      used: userUsage.used,
+      limit: userUsage.limit,
     });
 
-    // ✅ 删除临时文件
-    fs.unlink(tempPath, () => {});
+    fs.unlink(tempPath, () => {}); // 删除临时音频
   } catch (err) {
     console.error("❌ Error in /api/speaking/grade:", err);
-    res.status(500).json({ error: err.message || "Internal server error." });
+    res.status(500).json({ error: "Server error during speech grading." });
   }
 });
 
@@ -152,6 +169,5 @@ Please:
 // 🚀 启动服务
 // ==============================
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
-
