@@ -35,25 +35,26 @@ app.use(fileUpload());
 // ==============================
 async function readUsage() {
   try {
-    const res = await axios.get(`${JSONBIN_URL}/latest?ts=${Date.now()}`, {
+    const res = await axios.get(`${JSONBIN_URL}/latest`, {
       headers: {
         "X-Master-Key": JSONBIN_KEY,
         "X-Bin-Meta": "false",
-        "Cache-Control": "no-cache",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
-      },
+        "Expires": "0"
+      }
     });
 
-    const data = res.data?.record ? res.data.record : res.data;
+    const data = res.data?.record || res.data || {};
 
     console.log("📥 Read usage from JSONBin:", JSON.stringify(data, null, 2));
-
-    return data || {};   // <-- 这里必须在函数内部
+    return data;
   } catch (err) {
-    console.warn("⚠️ Failed to read JSONBin:", err.message);
-    return {};           // <-- return 必须在 catch 里面
+    console.warn("⚠️ Failed to read JSONBin:", err.response?.status, err.message);
+    return {};
   }
 }
+
 
 
 
