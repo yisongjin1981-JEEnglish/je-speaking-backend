@@ -163,9 +163,9 @@ const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
 // === Step 3️⃣ 更新用量 ===
 userUsage.used++;
 
-// ✅ 写入 JSONBin（同步等待 + 指向最新版本）
+// ✅ 写入 JSONBin（必须 PUT 到根，不是 /latest）
 try {
-  await axios.put(`${JSONBIN_URL}/latest`, usageData, {
+  await axios.put(JSONBIN_URL, usageData, {
     headers: {
       "Content-Type": "application/json",
       "X-Master-Key": JSONBIN_KEY,
@@ -186,6 +186,7 @@ res.json({
   remaining: userUsage.limit - userUsage.used,
   updated: true,
 });
+
 
 // === Step 4️⃣ 删除临时文件 ===
 fs.unlink(tempPath, () => {});
