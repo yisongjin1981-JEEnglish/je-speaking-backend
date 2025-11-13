@@ -29,57 +29,43 @@ app.use(fileUpload());
 const JSONBIN_URL = process.env.JSONBIN_URL; // e.g. https://api.jsonbin.io/v3/b/66abc12345
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
 
-// 从云端读取 usage.json（强制不缓存）
+// ✅ 从云端读取 usage.json（强制无缓存）
 async function readUsage() {
   try {
-    const res = await axios.get(JSONBIN_URL, {
+    const res = await axios.get(`${JSONBIN_URL}?t=${Date.now()}`, {
       headers: {
         "X-Master-Key": JSONBIN_KEY,
         "X-Bin-Meta": "false",
-        "X-Cache-Control": "no-cache", // ✅ 强制不使用缓存
+        "X-Cache-Control": "no-cache", // ✅ 强制跳过缓存
       },
     });
     return res.data?.record || {};
   } catch (err) {
-    console.warn("⚠️ usage.json not found, creating new one...");
+    console.warn("⚠️ usage.json not found or fetch failed:", err.message);
     return {};
   }
 }
 
-// 写回 usage.json 到云端
+// ✅ 写回 usage.json 到云端（不使用 /latest）
 async function writeUsage(data) {
-  await axios.put(JSONBIN_URL, data, {
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": JSONBIN_KEY,
-    },
-  });
-}
-
-// ==============================
-// 🧭 测试路由
-// ==============================
-app.get("/", (req, res) => {
-  res.send("✅ JE Speaking Backend (Persistent) is running successfully!");
-});
-
-// ==============================
-// 📊 查询用户使用次数
-// ==============================
-app.get("/api/usage/:email", async (req, res) => {
   try {
-    const email = req.params.email.toLowerCase();
-    const monthKey = new Date().toISOString().slice(0, 7);
-
-    const usageData = await readUsage();
-    const userUsage = usageData[email]?.[monthKey] || { used: 0, limit: 30 };
-
-    res.json(userUsage);
+    console.log("📤 Uploading usage data to JSONBin...");
+    const putRes = await axios.put(JSONBIN_URL, data, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Master-Key": JSONBIN_KEY,
+        "X-Bin-Meta": "false",
+      },
+    });
+    if (putRes.status === 200) {
+      console.log("✅ JSONBin updated successfully.");
+    } else {
+      console.warn(`⚠️ JSONBin responded with status ${putRes.status}`);
+    }
   } catch (err) {
-    console.error("❌ Error reading usage:", err);
-    res.status(500).json({ error: "Failed to fetch usage data." });
+    console.error("❌ Failed to update JSONBin:", err.response?.data || err.message);
   }
-});
+}
 
 // ==============================
 // 🧠 口语评分接口
@@ -118,8 +104,8 @@ app.post("/api/speaking/grade", async (req, res) => {
     const text = transcription.trim();
     console.log("🗣 Transcribed text:", text);
 
-   // === Step 2️⃣ GPT 反馈生成 ===
-const feedbackPrompt = `
+    // === Step 2️⃣ GPT 反馈生成 ===
+    const feedbackPrompt = `
 You are an English speaking coach for B1–B2 students.
 Below are 5 example sentences from the lesson.
 The student just gave a 90-second response based on these examples.
@@ -130,79 +116,69 @@ ${examples.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 Student's 90s response:
 ${text}
 
-Please:
-- Give feedback in **simple English (A2–B1 level)**.
-- Focus on 3 short parts:
+Please analyze the student's speech **by comparing it with the example sentences above**, and give detailed yet easy-to-understand feedback.
 
-💬 Fluency — comment + 1 suggestion  
-🧠 Vocabulary — comment + 1 simple reword  
-🛠 Grammar — comment + 1 correction (use 👉 and ✅)
+Your feedback must include **three labeled sections**, written in friendly classroom tone (A2–B1 English).  
+Keep it clear, short paragraphs (2–3 sentences per part), not bullet points.
+
+💬 **Fluency**
+- Compare the student's fluency with the tone and rhythm of the examples.  
+- Mention if the student speaks smoothly, too slowly, or hesitates.  
+- Suggest 1–2 ways to improve flow, intonation, or linking words.
+
+🧠 **Vocabulary**
+- Compare the student's word choice with the example sentences.  
+- Point out if they repeated simple words or missed useful expressions.  
+- Suggest 2–3 natural replacements or collocations (use 👉 and ✅).
+
+🛠 **Grammar & Structure**
+- Compare the student's grammar accuracy and sentence structure with the examples.  
+- Highlight common mistakes (tense, article, preposition, etc.) with corrections.  
+- End with one short tip for improvement, like “Practice using present continuous.”
+
+At the end, finish with one encouraging sentence, such as:
+✨ “You’re improving fast — keep practicing with the examples!” ✨
 `;
 
-const completion = await openai.chat.completions.create({
-  model: "gpt-4o-mini",
-  messages: [
-    { role: "system", content: "You are a kind English teacher." },
-    { role: "user", content: feedbackPrompt },
-  ],
-  temperature: 0.5,
-});
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a kind English teacher." },
+        { role: "user", content: feedbackPrompt },
+      ],
+      temperature: 0.5,
+    });
 
-const feedbackText = completion.choices[0].message.content.trim();
-console.log("🧠 Full Feedback Text:\n", feedbackText);
+    const feedbackText = completion.choices[0].message.content.trim();
+    console.log("🧠 Full Feedback Text:\n", feedbackText);
 
-// === Step 2.5️⃣ 解析三项反馈 ===
-const fluencyMatch = feedbackText.match(/Fluency[:：]?\s*([\s\S]*?)(?=🧠|Vocabulary|$)/i);
-const vocabMatch = feedbackText.match(/Vocabulary[:：]?\s*([\s\S]*?)(?=🛠|Grammar|$)/i);
-const grammarMatch = feedbackText.match(/Grammar[:：]?\s*([\s\S]*)/i);
+    // === Step 2.5️⃣ 解析三项反馈 ===
+    const fluencyMatch = feedbackText.match(/Fluency[:：]?\s*([\s\S]*?)(?=🧠|Vocabulary|$)/i);
+    const vocabMatch = feedbackText.match(/Vocabulary[:：]?\s*([\s\S]*?)(?=🛠|Grammar|$)/i);
+    const grammarMatch = feedbackText.match(/Grammar[:：]?\s*([\s\S]*)/i);
 
-const fluencyFeedback = fluencyMatch ? fluencyMatch[1].trim() : "";
-const vocabularyFeedback = vocabMatch ? vocabMatch[1].trim() : "";
-const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
+    const fluencyFeedback = fluencyMatch ? fluencyMatch[1].trim() : "";
+    const vocabularyFeedback = vocabMatch ? vocabMatch[1].trim() : "";
+    const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
 
-// === Step 3️⃣ 更新用量 ===
-userUsage.used++;
+    // === Step 3️⃣ 更新用量 ===
+    userUsage.used++;
 
-try {
-  console.log("📤 Uploading usageData to JSONBin...");
-  const putRes = await axios.put(JSONBIN_URL, usageData, {
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": JSONBIN_KEY,
-      "X-Bin-Meta": "false",
-    },
-  });
+    // ✅ 写回 JSONBin
+    await writeUsage(usageData);
 
-  if (putRes.status === 200) {
-    console.log(`✅ Usage updated in JSONBin for ${userEmail}, used = ${userUsage.used}`);
-  } else {
-    console.warn(`⚠️ JSONBin responded with status ${putRes.status}`);
-  }
-} catch (err) {
-  console.error("❌ Failed to update usage in JSONBin:", err.response?.data || err.message);
-}
+    // ✅ 返回前端
+    res.json({
+      fluency: fluencyFeedback,
+      vocabulary: vocabularyFeedback,
+      grammar: grammarFeedback,
+      used: userUsage.used,
+      limit: userUsage.limit,
+      remaining: userUsage.limit - userUsage.used,
+      updated: true,
+    });
 
-// ✅ 返回前端（带最新用量）
-res.json({
-  fluency: fluencyFeedback,
-  vocabulary: vocabularyFeedback,
-  grammar: grammarFeedback,
-  used: userUsage.used,
-  limit: userUsage.limit,
-  remaining: userUsage.limit - userUsage.used,
-  updated: true,
-});
-
-
-
-// === Step 4️⃣ 删除临时文件 ===
-fs.unlink(tempPath, () => {});
-
-
-
-
-
-    // 删除临时文件
+    // 🧹 清理临时文件
     fs.unlink(tempPath, () => {});
   } catch (err) {
     console.error("❌ Error in /api/speaking/grade:", err);
