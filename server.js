@@ -163,17 +163,23 @@ const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
 // === Step 3️⃣ 更新用量 ===
 userUsage.used++;
 
-// ✅ 写入 JSONBin（必须 PUT 到根，不是 /latest）
 try {
-  await axios.put(JSONBIN_URL, usageData, {
+  console.log("📤 Uploading usageData to JSONBin...");
+  const putRes = await axios.put(JSONBIN_URL, usageData, {
     headers: {
       "Content-Type": "application/json",
       "X-Master-Key": JSONBIN_KEY,
+      "X-Bin-Meta": "false",
     },
   });
-  console.log(`✅ Usage updated for ${userEmail}, now used = ${userUsage.used}`);
+
+  if (putRes.status === 200) {
+    console.log(`✅ Usage updated in JSONBin for ${userEmail}, used = ${userUsage.used}`);
+  } else {
+    console.warn(`⚠️ JSONBin responded with status ${putRes.status}`);
+  }
 } catch (err) {
-  console.error("❌ Failed to update usage:", err.response?.data || err.message);
+  console.error("❌ Failed to update usage in JSONBin:", err.response?.data || err.message);
 }
 
 // ✅ 返回前端（带最新用量）
@@ -186,6 +192,7 @@ res.json({
   remaining: userUsage.limit - userUsage.used,
   updated: true,
 });
+
 
 
 // === Step 4️⃣ 删除临时文件 ===
