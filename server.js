@@ -29,9 +29,7 @@ app.use(fileUpload());
 const JSONBIN_URL = process.env.JSONBIN_URL; // e.g. https://api.jsonbin.io/v3/b/66abc12345
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
 
-// ==============================
 // 🗂️ 从 JSONBin 云端读取 usage.json（强制不缓存）
-// ==============================
 async function readUsage() {
   try {
     const res = await axios.get(`${JSONBIN_URL}/latest?${Date.now()}`, {
@@ -42,12 +40,14 @@ async function readUsage() {
         "Pragma": "no-cache",
       },
     });
+    console.log("📥 Read usage from JSONBin:", JSON.stringify(res.data?.record, null, 2));
     return res.data?.record || {};
   } catch (err) {
-    console.warn("⚠️ usage.json not found or failed to read:", err.message);
+    console.warn("⚠️ usage.json not found or failed to read:", err.response?.status, err.message);
     return {};
   }
 }
+
 
 
 // ✅ 写回 usage.json 到云端（不使用 /latest）
