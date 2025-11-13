@@ -24,11 +24,11 @@ app.use(express.json());
 app.use(fileUpload());
 
 // ==============================
-// 🗂️ 从 JSONBin 云端读取 usage.json（强制不缓存，兼容 record）
+// 🗂️ 从 JSONBin 云端读取 usage.json（无缓存 & 自动兼容 record 格式）
 // ==============================
 async function readUsage() {
   try {
-    const res = await axios.get(`${JSONBIN_URL}/latest?${Date.now()}`, {
+    const res = await axios.get(`${JSONBIN_URL}/latest?ts=${Date.now()}`, {
       headers: {
         "X-Master-Key": JSONBIN_KEY,
         "X-Bin-Meta": "false",
@@ -37,19 +37,14 @@ async function readUsage() {
       },
     });
 
-    let raw = res.data;
-
-    // JSONBin 有两种格式
-    // ① { record: {...} }
-    // ② { ... }
-    const data = raw?.record ? raw.record : raw;
+    // JSONBin 可能返回 { record:{...} } 或 { ... }
+    const data = res.data?.record ? res.data.record : res.data;
 
     console.log("📥 Read usage from JSONBin:", JSON.stringify(data, null, 2));
 
     return data || {};
-
   } catch (err) {
-    console.warn("⚠️ Failed to read JSONBin:", err.response?.status, err.message);
+    console.warn("⚠️ Failed to read JSONBin:", err.message);
     return {};
   }
 }
@@ -61,24 +56,14 @@ async function readUsage() {
 async function writeUsage(data) {
   try {
     console.log("📤 Uploading usage data to JSONBin...");
-
-    const putRes = await axios.put(
-      JSONBIN_URL,
-      { record: data },    // ← 保证结构正确
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "X-Master-Key": JSONBIN_KEY,
-          "X-Bin-Meta": "false",
-        },
-      }
-    );
-
-    if (putRes.status === 200) {
-      console.log("✅ JSONBin updated successfully.");
-    } else {
-      console.warn(`⚠️ JSONBin responded with status ${putRes.status}`);
-    }
+    const putRes = await axios.put(JSONBIN_URL, data, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Master-Key": JSONBIN_KEY,
+        "X-Bin-Meta": "false",
+      },
+    });
+    console.log("✅ JSONBin updated successfully");
   } catch (err) {
     console.error("❌ Failed to update JSONBin:", err.response?.data || err.message);
   }
