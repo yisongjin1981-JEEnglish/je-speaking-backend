@@ -29,22 +29,26 @@ app.use(fileUpload());
 const JSONBIN_URL = process.env.JSONBIN_URL; // e.g. https://api.jsonbin.io/v3/b/66abc12345
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
 
-// ✅ 从云端读取 usage.json（强制无缓存）
+// ==============================
+// 🗂️ 从 JSONBin 云端读取 usage.json（强制不缓存）
+// ==============================
 async function readUsage() {
   try {
-    const res = await axios.get(`${JSONBIN_URL}?t=${Date.now()}`, {
+    const res = await axios.get(`${JSONBIN_URL}/latest?${Date.now()}`, {
       headers: {
         "X-Master-Key": JSONBIN_KEY,
         "X-Bin-Meta": "false",
-        "X-Cache-Control": "no-cache", // ✅ 强制跳过缓存
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
       },
     });
     return res.data?.record || {};
   } catch (err) {
-    console.warn("⚠️ usage.json not found or fetch failed:", err.message);
+    console.warn("⚠️ usage.json not found or failed to read:", err.message);
     return {};
   }
 }
+
 
 // ✅ 写回 usage.json 到云端（不使用 /latest）
 async function writeUsage(data) {
