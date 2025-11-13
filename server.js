@@ -163,11 +163,20 @@ const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
 // === Step 3️⃣ 更新用量 ===
 userUsage.used++;
 
-// ✅ 写入 JSONBin（同步等待，避免冷启动丢失）
-await writeUsage(usageData);
-console.log("✅ Usage updated in JSONBin");
+// ✅ 写入 JSONBin（同步等待 + 指向最新版本）
+try {
+  await axios.put(`${JSONBIN_URL}/latest`, usageData, {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": JSONBIN_KEY,
+    },
+  });
+  console.log(`✅ Usage updated for ${userEmail}, now used = ${userUsage.used}`);
+} catch (err) {
+  console.error("❌ Failed to update usage:", err.response?.data || err.message);
+}
 
-// ✅ 返回前端（带上最新用量）
+// ✅ 返回前端（带最新用量）
 res.json({
   fluency: fluencyFeedback,
   vocabulary: vocabularyFeedback,
@@ -180,6 +189,7 @@ res.json({
 
 // === Step 4️⃣ 删除临时文件 ===
 fs.unlink(tempPath, () => {});
+
 
 
 
