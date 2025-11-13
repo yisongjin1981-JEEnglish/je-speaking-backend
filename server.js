@@ -92,7 +92,7 @@ app.get("/api/usage/:email", async (req, res) => {
     const email = req.params.email.toLowerCase();
     const monthKey = new Date().toISOString().slice(0, 7);
 
-    const usageData = (await readUsage()).record || {};
+    const usageData = await readUsage();
     const userUsage = usageData[email]?.[monthKey] || { used: 0, limit: 30 };
 
     res.json(userUsage);
