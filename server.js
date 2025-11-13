@@ -24,7 +24,7 @@ app.use(express.json());
 app.use(fileUpload());
 
 // ==============================
-// 🗂️ 从 JSONBin 云端读取 usage.json（强制不缓存 & 兼容 record）
+// 🗂️ 从 JSONBin 云端读取 usage.json（强制不缓存，兼容 record）
 // ==============================
 async function readUsage() {
   try {
@@ -37,16 +37,12 @@ async function readUsage() {
       },
     });
 
-    // 🧩 兼容 JSONBin 的两种返回格式
-    let data;
+    let raw = res.data;
 
-    if (res.data?.record) {
-      // 你终端看到的就是这种格式
-      data = res.data.record;
-    } else {
-      // 万一是旧格式
-      data = res.data;
-    }
+    // JSONBin 有两种格式
+    // ① { record: {...} }
+    // ② { ... }
+    const data = raw?.record ? raw.record : raw;
 
     console.log("📥 Read usage from JSONBin:", JSON.stringify(data, null, 2));
 
@@ -59,19 +55,25 @@ async function readUsage() {
 }
 
 
-
-
-// ✅ 写回 usage.json 到云端（不使用 /latest）
+// ==============================
+// 📝 写回 usage.json 到云端（必须包含 record 外壳）
+// ==============================
 async function writeUsage(data) {
   try {
     console.log("📤 Uploading usage data to JSONBin...");
-    const putRes = await axios.put(JSONBIN_URL, data, {
-      headers: {
-        "Content-Type": "application/json",
-        "X-Master-Key": JSONBIN_KEY,
-        "X-Bin-Meta": "false",
-      },
-    });
+
+    const putRes = await axios.put(
+      JSONBIN_URL,
+      { record: data },    // ← 保证结构正确
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-Master-Key": JSONBIN_KEY,
+          "X-Bin-Meta": "false",
+        },
+      }
+    );
+
     if (putRes.status === 200) {
       console.log("✅ JSONBin updated successfully.");
     } else {
@@ -81,6 +83,7 @@ async function writeUsage(data) {
     console.error("❌ Failed to update JSONBin:", err.response?.data || err.message);
   }
 }
+
 // ==============================
 // 📊 查询用户使用次数
 // ==============================
@@ -89,7 +92,7 @@ app.get("/api/usage/:email", async (req, res) => {
     const email = req.params.email.toLowerCase();
     const monthKey = new Date().toISOString().slice(0, 7);
 
-    const usageData = await readUsage();
+    const usageData = (await readUsage()).record || {};
     const userUsage = usageData[email]?.[monthKey] || { used: 0, limit: 30 };
 
     res.json(userUsage);
