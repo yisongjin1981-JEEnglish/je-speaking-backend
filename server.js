@@ -66,6 +66,23 @@ async function writeUsage(data) {
     console.error("❌ Failed to update JSONBin:", err.response?.data || err.message);
   }
 }
+// ==============================
+// 📊 查询用户使用次数
+// ==============================
+app.get("/api/usage/:email", async (req, res) => {
+  try {
+    const email = req.params.email.toLowerCase();
+    const monthKey = new Date().toISOString().slice(0, 7);
+
+    const usageData = await readUsage();
+    const userUsage = usageData[email]?.[monthKey] || { used: 0, limit: 30 };
+
+    res.json(userUsage);
+  } catch (err) {
+    console.error("❌ Error reading usage:", err);
+    res.status(500).json({ error: "Failed to fetch usage data." });
+  }
+});
 
 // ==============================
 // 🧠 口语评分接口
