@@ -14,6 +14,13 @@ const PORT = process.env.PORT || 10000;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ==============================
+// 🗂️ JSONBin 云存储配置（你缺少的就是这一段）
+// ==============================
+const JSONBIN_URL = process.env.JSONBIN_URL; // 例如 https://api.jsonbin.io/v3/b/66abc12345
+const JSONBIN_KEY = process.env.JSONBIN_KEY;
+
+
+// ==============================
 // 🌐 基础设置
 // ==============================
 app.use(cors({
@@ -26,16 +33,15 @@ app.use(fileUpload());
 // ==============================
 // 🗂️ 从 JSONBin 云端读取 usage.json（无缓存 & 自动兼容 record 格式）
 // ==============================
-async function readUsage() {
-  try {
-    const res = await axios.get(`${JSONBIN_URL}/latest?ts=${Date.now()}`, {
-      headers: {
-        "X-Master-Key": JSONBIN_KEY,
-        "X-Bin-Meta": "false",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-      },
-    });
+const res = await axios.get(`${JSONBIN_URL}/latest?ts=${Date.now()}`, {
+  headers: {
+    "X-Master-Key": JSONBIN_KEY,
+    "X-Access-Key": JSONBIN_KEY,
+    "X-Bin-Meta": "false",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+  },
+});
 
     // JSONBin 可能返回 { record:{...} } 或 { ... }
     const data = res.data?.record ? res.data.record : res.data;
