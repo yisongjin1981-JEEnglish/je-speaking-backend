@@ -33,27 +33,28 @@ app.use(fileUpload());
 // ==============================
 // 🗂️ 从 JSONBin 云端读取 usage.json（无缓存 & 自动兼容 record 格式）
 // ==============================
-const res = await axios.get(`${JSONBIN_URL}/latest?ts=${Date.now()}`, {
-  headers: {
-    "X-Master-Key": JSONBIN_KEY,
-    "X-Access-Key": JSONBIN_KEY,
-    "X-Bin-Meta": "false",
-    "Cache-Control": "no-cache",
-    "Pragma": "no-cache",
-  },
-});
+async function readUsage() {
+  try {
+    const res = await axios.get(`${JSONBIN_URL}/latest?ts=${Date.now()}`, {
+      headers: {
+        "X-Master-Key": JSONBIN_KEY,
+        "X-Bin-Meta": "false",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      },
+    });
 
-    // JSONBin 可能返回 { record:{...} } 或 { ... }
     const data = res.data?.record ? res.data.record : res.data;
 
     console.log("📥 Read usage from JSONBin:", JSON.stringify(data, null, 2));
 
-    return data || {};
+    return data || {};   // <-- 这里必须在函数内部
   } catch (err) {
     console.warn("⚠️ Failed to read JSONBin:", err.message);
-    return {};
+    return {};           // <-- return 必须在 catch 里面
   }
 }
+
 
 
 // ==============================
