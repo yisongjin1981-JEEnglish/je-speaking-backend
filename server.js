@@ -163,23 +163,24 @@ const grammarFeedback = grammarMatch ? grammarMatch[1].trim() : "";
 // === Step 3️⃣ 更新用量 ===
 userUsage.used++;
 
-// ✅ 立即返回前端（带上最新用量）
+// ✅ 写入 JSONBin（同步等待，避免冷启动丢失）
+await writeUsage(usageData);
+console.log("✅ Usage updated in JSONBin");
+
+// ✅ 返回前端（带上最新用量）
 res.json({
   fluency: fluencyFeedback,
   vocabulary: vocabularyFeedback,
   grammar: grammarFeedback,
-  used: userUsage.used,        // ✅ 新增：当前最新用量
+  used: userUsage.used,
   limit: userUsage.limit,
   remaining: userUsage.limit - userUsage.used,
-  updated: true,               // ✅ 新增：标识用于调试
+  updated: true,
 });
 
-// === Step 4️⃣ 异步写入 JSONBin + 删除临时文件 ===
-writeUsage(usageData)
-  .then(() => console.log("✅ Usage updated in JSONBin"))
-  .catch(err => console.error("❌ Failed to update usage:", err));
-
+// === Step 4️⃣ 删除临时文件 ===
 fs.unlink(tempPath, () => {});
+
 
 
 
